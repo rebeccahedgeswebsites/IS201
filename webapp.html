@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4; /* Original background color */
+            color: black;
+            flex-direction: column;
+        }
+        .game-container {
+            text-align: center;
+            z-index: 2; /* Ensures content is visible on top of the background */
+        }
+        .row {
+            display: flex;
+            justify-content: center;
+            margin: 5px 0;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            margin: 5px;
+            border: 2px solid #ccc;
+            text-align: center;
+            font-size: 24px;
+            line-height: 50px;
+            text-transform: uppercase;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.7);
+            color: black;
+        }
+        .correct {
+            background-color: #6aaa64;
+            color: white;
+        }
+        .present {
+            background-color: #c9b458;
+            color: white;
+        }
+        .absent {
+            background-color: #787c7e;
+            color: white;
+        }
+        .grey {
+            background-color: #D3D3D3;
+            color: black;
+        }
+        .grey {
+            background-color: #D3D3D3;
+            color: black;
+        }
+        .keyboard {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+            width: 320px;
+        }
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            margin: 5px 0;
+        }
+        .key {
+            width: 40px;
+            height: 40px;
+            margin: 4px;
+            font-size: 18px;
+            line-height: 40px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #f4f4f4;
+            border: 1px solid #ccc;
+            text-transform: uppercase;
+        }
+        .key.correct {
+            background-color: #6aaa64;
+            color: white;
+        }
+        .key.present {
+            background-color: #c9b458;
+            color: white;
+        }
+        .key.absent {
+            background-color: #787c7e;
+            color: white;
+        }
+        .key.guessed {
+            background-color: #a9a9a9;
+            color: white;
+        }
+        h1 {
+            font-size: 32px;
+        }
+        .message {
+            font-size: 18px;
+            margin-top: 10px;
+            color: red;
+        }
+
+        /* Confetti animation styles */
+        .confetti {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .confetti-piece {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f39c12;
+            animation: confetti 3s infinite;
+        }
+
+        @keyframes confetti {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Modal Popup Styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .modal-button {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Wordle Game</h1>
+        <div id="grid" class="grid"></div>
+        <p class="message" id="message"></p>
+        <div id="keyboard" class="keyboard"></div>
+    </div>
+
+    <div id="confetti" class="confetti"></div>
+
+    <!-- Modal for Play Again -->
+    <div id="play-again-modal" class="modal">
+        <div class="modal-content">
+            <h2>Congratulations!</h2>
+            <p>You guessed the word!</p>
+            <button id="play-again" class="modal-button">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // List of possible words for the game
+        const words = ["apple", "grape", "lemon", "peach", "plumb", "mango", "berry"];
+        let targetWord = words[Math.floor(Math.random() * words.length)]; // Random word selection
+        const maxGuesses = 6;
+        let guessesLeft = maxGuesses;
+        let guessedWords = [];
+        let letterStatuses = {};
+
+        // Function to display the grid with input fields
+        function displayGrid() {
+            const grid = document.getElementById("grid");
+            grid.innerHTML = "";
+            for (let i = 0; i < maxGuesses; i++) {
+                const row = document.createElement("div");
+                row.classList.add("row");
+                for (let j = 0; j < 5; j++) {
+                    const cell = document.createElement("input");
+                    cell.type = "text";
+                    cell.maxLength = 1;
+                    cell.classList.add("cell");
+                    cell.addEventListener('input', handleInput);
+                    row.appendChild(cell);
+                }
+                grid.appendChild(row);
+            }
+            // Automatically focus on the first cell of the first row
+            const firstCell = grid.querySelector('.row input');
+            if (firstCell) firstCell.focus();
+        }
+
+        // Function to display the letter bank (keyboard)
+        function displayKeyboard() {
+            const keyboard = document.getElementById("keyboard");
+            keyboard.innerHTML = "";
+
+            const rows = [
+                ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+                ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+                ["Z", "X", "C", "V", "B", "N", "M"]
+            ];
+
+            rows.forEach(row => {
+                const keyboardRow = document.createElement("div");
+                keyboardRow.classList.add("keyboard-row");
+                row.forEach(letter => {
+                    const key = document.createElement("div");
+                    key.classList.add("key");
+                    key.textContent = letter;
+                    key.addEventListener("click", () => handleInputKey(letter));
+                    keyboardRow.appendChild(key);
+                });
+                keyboard.appendChild(keyboardRow);
+            });
+        }
+
+        // Function to handle clicking a key on the keyboard
+        function handleInputKey(letter) {
+            const focusedCell = document.activeElement;
+            if (focusedCell && focusedCell.tagName.toLowerCase() === "input") {
+                focusedCell.value = letter;
+                const nextCell = focusedCell.nextElementSibling;
+                if (nextCell) nextCell.focus();
+            }
+        }
+
+        // Handle input for each cell to move focus to the next one
+        function handleInput(event) {
+            const cell = event.target;
+            if (cell.value.length === 1) {
+                const nextCell = cell.nextElementSibling;
+                if (nextCell) {
+                    nextCell.focus();
+                }
+            }
+        }
+
+        // Check the guess and provide feedback
+        function checkGuess() {
+            const rows = document.querySelectorAll('.row');
+            const guessArray = Array.from(rows[maxGuesses - guessesLeft].children).map(cell => cell.value.toLowerCase());
+
+            // Validate the guess length and characters
+            if (guessArray.length !== 5 || guessArray.some(letter => !/^[a-z]+$/.test(letter))) {
+                document.getElementById("message").textContent = "Please enter a valid 5-letter word.";
+                return;
+            }
+
+            const guess = guessArray.join('');
+            if (guessedWords.includes(guess)) {
+                document.getElementById("message").textContent = "You've already guessed that word.";
+                return;
+            }
+
+            guessedWords.push(guess);
+            guessesLeft--;
+
+            const row = rows[maxGuesses - guessesLeft - 1];
+            const targetWordCopy = [...targetWord]; // Create a copy of the target word to track used letters
+            let guessLettersUsed = {};
+
+            // First, mark correctly positioned letters as green
+            for (let i = 0; i < 5; i++) {
+                const cell = row.children[i];
+                const letter = guess[i];
+                if (letter === targetWord[i]) {
+                    cell.classList.add("correct");
+                    targetWordCopy[i] = null; // Remove this letter from the copy
+                    guessLettersUsed[letter] = "correct";
+                } else {
+                    cell.value = letter.toUpperCase();
+                }
+            }
+
+            // Now, mark other letters that are present but in the wrong position
+            for (let i = 0; i < 5; i++) {
+                const cell = row.children[i];
+                const letter = guess[i];
+
+                if (targetWordCopy.includes(letter) && !cell.classList.contains("correct")) {
+                    const index = targetWordCopy.indexOf(letter);
+                    if (index !== -1) {
+                        targetWordCopy[index] = null; // Remove the letter from targetWordCopy
+                        cell.classList.add("present");
+                        guessLettersUsed[letter] = "present";
+                    } else {
+                        cell.classList.add("grey");
+                        guessLettersUsed[letter] = "absent";
+                    }
+                }
+            }
+
+            // Update the letter bank with the guessed letter statuses
+            updateLetterBank(guessLettersUsed);
+
+            // If the word is guessed correctly, display confetti and message
+            if (guess === targetWord) {
+                document.getElementById("message").textContent = "Congratulations! You guessed the word!";
+                displayConfetti();
+                disableInput();
+                showModal(); // Show modal with play again option
+            } else if (guessesLeft === 0) {
+                document.getElementById("message").textContent = "Game over! The word was: " + targetWord.toUpperCase();
+                disableInput();
+                showModal(); // Show modal with play again option
+            }
+        }
+
+        // Show the Play Again modal
+        function showModal() {
+            const modal = document.getElementById("play-again-modal");
+            modal.style.display = "flex";
+        }
+
+        // Hide the Play Again modal and reset game
+        function hideModal() {
+            const modal = document.getElementById("play-again-modal");
+            modal.style.display = "none";
+        }
+
+        // Update the letter bank with the letter statuses
+        function updateLetterBank(guessLettersUsed) {
+            const keys = document.querySelectorAll('.key');
+            keys.forEach(key => {
+                const letter = key.textContent.toLowerCase();
+                if (guessLettersUsed[letter]) {
+                    const status = guessLettersUsed[letter];
+                    key.classList.remove("correct", "present", "absent", "guessed");
+                    key.classList.add(status);
+                } else if (!letterStatuses[letter] && guessedWords.some(word => word.includes(letter))) {
+                    key.classList.add("guessed");
+                }
+            });
+            letterStatuses = { ...letterStatuses, ...guessLettersUsed };
+        }
+
+        // Disable all input fields after the game is finished
+        function disableInput() {
+            const inputFields = document.querySelectorAll('input');
+            inputFields.forEach(input => input.disabled = true);
+        }
+
+        // Display confetti animation upon guessing correctly
+        function displayConfetti() {
+            const confettiContainer = document.getElementById("confetti");
+            for (let i = 0; i < 100; i++) {
+                const confettiPiece = document.createElement("div");
+                confettiPiece.classList.add("confetti-piece");
+                confettiPiece.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                confettiPiece.style.left = `${Math.random() * 100}vw`;
+                confettiPiece.style.animationDuration = `${Math.random() * 3 + 2}s`;
+                confettiPiece.style.animationDelay = `${Math.random() * 2}s`;
+                confettiContainer.appendChild(confettiPiece);
+            }
+        }
+
+        // Stop and clear the confetti animation
+        function stopConfetti() {
+            const confettiContainer = document.getElementById("confetti");
+            confettiContainer.innerHTML = ""; // Remove all confetti pieces
+        }
+
+        // Listen for Enter key to submit guess
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Enter" && guessesLeft > 0) {
+                checkGuess();
+                moveToNextBox(); // Move to the next box automatically after submitting the guess
+            }
+            // Handle Backspace key to move focus back to previous box if the current box is empty
+            if (event.key === "Backspace") {
+                const focusedCell = document.activeElement;
+                if (!focusedCell.value) {
+                    const previousCell = focusedCell.previousElementSibling;
+                    if (previousCell) {
+                        previousCell.focus();
+                    }
+                }
+            }
+        });
+
+        // Move focus to the next empty box after submitting the guess
+        function moveToNextBox() {
+            const inputFields = document.querySelectorAll('input');
+            for (let i = 0; i < inputFields.length; i++) {
+                if (inputFields[i].value === "") {
+                    inputFields[i].focus();
+                    break;
+                }
+            }
+        }
+
+        // Handle Play Again button click to reset the game
+        document.getElementById("play-again").addEventListener("click", function() {
+            hideModal(); // Hide modal
+            stopConfetti(); // Clear the confetti animation
+            targetWord = words[Math.floor(Math.random() * words.length)]; // New random word
+            guessesLeft = maxGuesses;
+            guessedWords = [];
+            letterStatuses = {};
+            document.getElementById("message").textContent = "";
+            displayGrid(); // Display the grid again
+            displayKeyboard(); // Display the letter keyboard
+        });
+
+        // Display the grid and keyboard, and initialize the game
+        displayGrid();
+        displayKeyboard();
+    </script>
+</body>
+</html>
